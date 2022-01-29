@@ -1,0 +1,102 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ------ BASE DE DONNEES ------
+URL = "YOUR ATLAS OR LOCALHOST MONGODB INSTANCE URL"
+connect(host=URL)
+
+
+class Pharmacie(Document):
+    nom = StringField(required=True, max_length=70)
+    loc = PointField()
+    phone = StringField(max_length=70)
+    zone = StringField(max_length=70)
+# ---------------------------------
+
+
+@app.get('/')
+async def home():
+    return {
+        "msg": "Bienvenue sur l'API DE GeoPharm !!!"
+    }
+
+
+@app.get('/all')
+async def get_all():
+    all_places = [
+        {
+            'nom': p.nom,
+            'loc': p.loc,
+            'phone': p.phone,
+            'zone': p.zone
+        } for p in Pharmacie.objects
+    ]
+
+    return all_places
+
+
+@app.get("/near")
+async def near(user_lng: float, user_lat: float):
+    nearest_pharms = Pharmacie.objects(
+        loc__near={"type": "Point", "coordinates": [user_lng, user_lat]},
+        loc__max_distance=5000,
+    )
+
+    response = [
+        {
+            'nom': p.nom,
+            'loc': p.loc,
+            'phone': p.phone,
+            'zone': p.zone
+        } for p in nearest_pharms
+    ]
+
+    return response
+
+
+@app.get('/search')
+async def search(to_search: str):
+    founded_pharms = Pharmacie.objects(
+        Q(zone__icontains=to_search) | Q(nom__icontains=to_search)
+    )
+
+    response = [
+        {
+            'nom': p.nom,
+            'loc': p.loc,
+            'phone': p.phone,
+            'zone': p.zone
+        } for p in founded_pharms
+    ]
+
+    return response
+
+
+@app.post('/create', status_code=201)
+async def create(nom: str, lng: float, lat: float, phone: str, zone: str):
+    try:
+        pharm = Pharmacie(
+            nom=nom.title(),
+            loc={"type": "Point", "coordinates": [lng, lat]},
+            phone=phone,
+            zone=zone.title(),
+        )
+        pharm.save()
+        return {"msg": "pharmacie créée avec succèss"}
+
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="échec de creation ! données invalides !!!"
+        )

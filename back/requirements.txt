@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+mongoengine
+dnspython
